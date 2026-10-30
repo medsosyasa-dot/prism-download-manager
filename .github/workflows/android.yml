@@ -64,7 +64,23 @@ jobs:
 
       - name: Build the APK
         working-directory: app
-        run: npx tauri android build --apk --debug --target aarch64
+        run: |
+          set -o pipefail
+          npx tauri android build --apk --debug --target aarch64 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # Shows the first errors on the run page (Annotations) so a failure can be read at a glance.
+      - name: Summarise build errors
+        if: failure()
+        run: |
+          f="$RUNNER_TEMP/build.log"
+          [ -f "$f" ] || exit 0
+          {
+            grep -n -E "^(error|Error)|error\[|FAILED|What went wrong|Caused by|panicked" -A6 "$f" | head -n 70
+            echo "---- last lines ----"
+            tail -n 25 "$f"
+          } | sed 's/\x1b\[[0-9;]*m//g' | head -c 6000 > "$RUNNER_TEMP/summary.txt"
+          msg=$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' "$RUNNER_TEMP/summary.txt")
+          echo "::error title=Build errors::${msg}"
 
       - name: Collect the APK
         run: |
