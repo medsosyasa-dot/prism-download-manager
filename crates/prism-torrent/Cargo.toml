@@ -7,13 +7,19 @@ rust-version.workspace = true
 description = "BitTorrent / magnet support for Prism (librqbit wrapper)."
 
 [dependencies]
-librqbit = { version = "9", default-features = false, features = ["default-tls"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 bytes = { workspace = true }
+
+# Desktop keeps the system TLS stack. Android has no OpenSSL to link: rustls + ring instead.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+librqbit = { version = "9", default-features = false, features = ["default-tls"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+librqbit = { version = "9", default-features = false, features = ["rust-tls"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
