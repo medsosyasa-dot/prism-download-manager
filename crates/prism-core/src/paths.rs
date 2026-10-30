@@ -22,6 +22,17 @@ pub fn data_dir() -> PathBuf {
     if let Some(portable) = portable_dir() {
         return portable;
     }
+    platform_data_dir()
+}
+
+/// Android: `dirs` knows no home; the app's private folder is the only place always writable.
+#[cfg(target_os = "android")]
+fn platform_data_dir() -> PathBuf {
+    PathBuf::from("/data/data/dev.prism.manager/files/prism")
+}
+
+#[cfg(not(target_os = "android"))]
+fn platform_data_dir() -> PathBuf {
     let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     if cfg!(target_os = "linux") {
         base.join("prism")
@@ -56,6 +67,17 @@ pub fn tools_dir() -> PathBuf {
 /// Default folder for finished downloads (`~/Downloads/Prism` style is avoided:
 /// IDM users expect category sub-folders directly under Downloads).
 pub fn default_download_dir() -> PathBuf {
+    platform_download_dir()
+}
+
+/// Android: the app's own folder on shared storage needs no permission (`Android/data/<id>/files`).
+#[cfg(target_os = "android")]
+fn platform_download_dir() -> PathBuf {
+    PathBuf::from("/storage/emulated/0/Android/data/dev.prism.manager/files/Download")
+}
+
+#[cfg(not(target_os = "android"))]
+fn platform_download_dir() -> PathBuf {
     dirs::download_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join("Downloads")))
         .unwrap_or_else(|| PathBuf::from("."))

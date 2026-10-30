@@ -1,0 +1,22 @@
+{
+  "identifier": "mobile",
+  "description": "Capabilities of the Prism view on Android",
+  "windows": [
+    "*"
+  ],
+  "platforms": [
+    "android",
+    "iOS"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "opener:default",
+    "opener:allow-open-url",
+    "notification:default"
+  ]
+}

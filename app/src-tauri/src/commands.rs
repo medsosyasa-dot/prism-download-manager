@@ -368,22 +368,38 @@ pub async fn item_details(core: State<'_, Core>, id: String) -> CmdResult<Option
 #[tauri::command]
 pub async fn open_item(core: State<'_, Core>, app: AppHandle, id: String) -> CmdResult<()> {
     let item = core.item(&id).ok_or("unknown item")?;
-    app.opener()
-        .open_path(item.path().to_string_lossy(), None::<&str>)
-        .map_err(err)
+    #[cfg(desktop)]
+    {
+        app.opener()
+            .open_path(item.path().to_string_lossy(), None::<&str>)
+            .map_err(err)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = (app, item);
+        Err("Opening a file is not available on Android yet.".into())
+    }
 }
 
 #[tauri::command]
 pub async fn reveal_item(core: State<'_, Core>, app: AppHandle, id: String) -> CmdResult<()> {
     let item = core.item(&id).ok_or("unknown item")?;
-    let path = item.path();
-    if path.exists() {
-        app.opener().reveal_item_in_dir(&path).map_err(err)
-    } else {
-        std::fs::create_dir_all(&item.save_dir).ok();
-        app.opener()
-            .open_path(item.save_dir.to_string_lossy(), None::<&str>)
-            .map_err(err)
+    #[cfg(desktop)]
+    {
+        let path = item.path();
+        if path.exists() {
+            app.opener().reveal_item_in_dir(&path).map_err(err)
+        } else {
+            std::fs::create_dir_all(&item.save_dir).ok();
+            app.opener()
+                .open_path(item.save_dir.to_string_lossy(), None::<&str>)
+                .map_err(err)
+        }
+    }
+    #[cfg(mobile)]
+    {
+        let _ = (app, item);
+        Err("Showing a file in its folder is not available on Android yet.".into())
     }
 }
 
@@ -392,9 +408,17 @@ pub async fn open_path(app: AppHandle, path: PathBuf) -> CmdResult<()> {
     if !path.exists() {
         std::fs::create_dir_all(&path).map_err(err)?;
     }
-    app.opener()
-        .open_path(path.to_string_lossy(), None::<&str>)
-        .map_err(err)
+    #[cfg(desktop)]
+    {
+        app.opener()
+            .open_path(path.to_string_lossy(), None::<&str>)
+            .map_err(err)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err("Opening a folder is not available on Android yet.".into())
+    }
 }
 
 // ----- queues & categories ----------------------------------------------------------------
@@ -694,10 +718,18 @@ pub async fn show_main(app: AppHandle) -> CmdResult<()> {
 
 #[tauri::command]
 pub async fn set_autostart(app: AppHandle, enabled: bool) -> CmdResult<bool> {
-    use tauri_plugin_autostart::ManagerExt;
-    let al = app.autolaunch();
-    if enabled { al.enable() } else { al.disable() }.map_err(err)?;
-    al.is_enabled().map_err(err)
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+        let al = app.autolaunch();
+        if enabled { al.enable() } else { al.disable() }.map_err(err)?;
+        al.is_enabled().map_err(err)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = (app, enabled);
+        Ok(false)
+    }
 }
 
 #[tauri::command]
@@ -712,18 +744,32 @@ pub async fn free_space(path: PathBuf) -> CmdResult<Option<u64>> {
 
 #[tauri::command]
 pub async fn clipboard_read() -> CmdResult<String> {
-    Ok({
-        arboard::Clipboard::new()
+    // Android: the page reads the clipboard itself (navigator.clipboard), see `readClipboardText`.
+    #[cfg(desktop)]
+    {
+        Ok(arboard::Clipboard::new()
             .and_then(|mut c| c.get_text())
-            .unwrap_or_default()
-    })
+            .unwrap_or_default())
+    }
+    #[cfg(mobile)]
+    {
+        Ok(String::new())
+    }
 }
 
 #[tauri::command]
 pub async fn clipboard_write(text: String) -> CmdResult<()> {
-    arboard::Clipboard::new()
-        .and_then(|mut c| c.set_text(text))
-        .map_err(err)
+    #[cfg(desktop)]
+    {
+        arboard::Clipboard::new()
+            .and_then(|mut c| c.set_text(text))
+            .map_err(err)
+    }
+    #[cfg(mobile)]
+    {
+        let _ = text;
+        Err("The page copies on Android".into())
+    }
 }
 
 #[tauri::command]

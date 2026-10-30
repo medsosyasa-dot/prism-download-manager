@@ -21,6 +21,11 @@ export const win = {
   close: async () => {
     const w = await current();
     if (!w) return;
+    // Android has one view: a dialog is a route of the main window, "closing" goes back to the list.
+    if (w.label === "main" && /^#\/(?!$)/.test(location.hash)) {
+      location.hash = "#/";
+      return;
+    }
     if (w.label === "main") await w.close();
     else await w.destroy();
   },
@@ -64,7 +69,13 @@ export async function copyText(text: string) {
     }
     return true;
   } catch {
-    return false;
+    // Android: Rust has no clipboard, the web view does.
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -72,7 +83,8 @@ export async function readClipboardText(): Promise<string> {
   try {
     if (inTauri) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return await invoke<string>("clipboard_read");
+      const text = await invoke<string>("clipboard_read");
+      if (text) return text;
     }
     return await navigator.clipboard.readText();
   } catch {

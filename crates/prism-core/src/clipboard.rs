@@ -50,49 +50,61 @@ impl ClipboardMonitor {
         F: Fn(Vec<String>) + Send + 'static,
     {
         let stop = Arc::new(AtomicBool::new(false));
-        let flag = stop.clone();
-        std::thread::Builder::new()
-            .name("prism-clipboard".into())
-            .spawn(move || {
-                let Ok(mut clipboard) = arboard::Clipboard::new() else {
-                    tracing::warn!("clipboard unavailable; monitor disabled");
-                    return;
-                };
-                // Ignore whatever is on the clipboard at startup.
-                let mut last = clipboard.get_text().unwrap_or_default();
-                let mut stamp = change_stamp();
-                while !flag.load(Ordering::Relaxed) {
-                    std::thread::sleep(Duration::from_millis(700));
-                    // Only read the contents after the system says they changed, and never
-                    // read what password managers mark as concealed.
-                    let now = change_stamp();
-                    if now.is_some() && now == stamp {
-                        continue;
-                    }
-                    if is_concealed() {
-                        stamp = now;
-                        continue;
-                    }
-                    // Another app may hold the clipboard for a moment: retry on the next tick.
-                    let Ok(text) = clipboard.get_text() else {
-                        continue;
-                    };
-                    stamp = now;
-                    if text == last {
-                        continue;
-                    }
-                    last = text;
-                    // `None` means monitoring is switched off in settings right now.
-                    let Some(exts) = extensions() else { continue };
-                    let urls = extract_urls(&last, &exts);
-                    if !urls.is_empty() {
-                        on_urls(urls);
-                    }
-                }
-            })
-            .expect("spawn clipboard thread");
+        // Android doesn't let a background app read the clipboard: no monitor there.
+        #[cfg(not(target_os = "android"))]
+        spawn_poller(stop.clone(), extensions, on_urls);
+        #[cfg(target_os = "android")]
+        let _ = (&extensions, &on_urls);
         Self { stop }
     }
+}
+
+#[cfg(not(target_os = "android"))]
+fn spawn_poller<E, F>(flag: Arc<AtomicBool>, extensions: E, on_urls: F)
+where
+    E: Fn() -> Option<Vec<String>> + Send + 'static,
+    F: Fn(Vec<String>) + Send + 'static,
+{
+    std::thread::Builder::new()
+        .name("prism-clipboard".into())
+        .spawn(move || {
+            let Ok(mut clipboard) = arboard::Clipboard::new() else {
+                tracing::warn!("clipboard unavailable; monitor disabled");
+                return;
+            };
+            // Ignore whatever is on the clipboard at startup.
+            let mut last = clipboard.get_text().unwrap_or_default();
+            let mut stamp = change_stamp();
+            while !flag.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(700));
+                // Only read the contents after the system says they changed, and never
+                // read what password managers mark as concealed.
+                let now = change_stamp();
+                if now.is_some() && now == stamp {
+                    continue;
+                }
+                if is_concealed() {
+                    stamp = now;
+                    continue;
+                }
+                // Another app may hold the clipboard for a moment: retry on the next tick.
+                let Ok(text) = clipboard.get_text() else {
+                    continue;
+                };
+                stamp = now;
+                if text == last {
+                    continue;
+                }
+                last = text;
+                // `None` means monitoring is switched off in settings right now.
+                let Some(exts) = extensions() else { continue };
+                let urls = extract_urls(&last, &exts);
+                if !urls.is_empty() {
+                    on_urls(urls);
+                }
+            }
+        })
+        .expect("spawn clipboard thread");
 }
 
 /// A counter the OS bumps on every clipboard change (`None`: not available, read every time).

@@ -15,14 +15,25 @@ pub(crate) const MAX_REDIRECTS: usize = 10;
 /// (rustls-platform-verifier). Cloning it shares the TLS session cache, so workers of the same
 /// download resume TLS sessions instead of doing full handshakes.
 pub(crate) fn base_tls_config() -> Result<rustls::ClientConfig, String> {
-    use rustls_platform_verifier::BuilderVerifierExt;
     let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-    rustls::ClientConfig::builder_with_provider(provider)
+    let builder = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
-        .map_err(|e| e.to_string())?
-        .with_platform_verifier()
-        .map_err(|e| e.to_string())
-        .map(|b| b.with_no_client_auth())
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(target_os = "android"))]
+    {
+        use rustls_platform_verifier::BuilderVerifierExt;
+        builder
+            .with_platform_verifier()
+            .map_err(|e| e.to_string())
+            .map(|b| b.with_no_client_auth())
+    }
+    // Android: the OS trust store is only reachable through Java; use the bundled Mozilla roots.
+    #[cfg(target_os = "android")]
+    {
+        let mut roots = rustls::RootCertStore::empty();
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        Ok(builder.with_root_certificates(roots).with_no_client_auth())
+    }
 }
 
 /// Everything needed to build a client for a download.

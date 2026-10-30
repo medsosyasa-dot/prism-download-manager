@@ -7,6 +7,11 @@ rust-version.workspace = true
 description = "Prism Download Manager"
 default-run = "prism"
 
+[lib]
+# `_lib` so the library and the `prism` binary don't share a name; Android loads `libprism_app_lib.so`.
+name = "prism_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [[bin]]
 name = "prism"
 path = "src/main.rs"
@@ -19,16 +24,9 @@ prism-core = { workspace = true }
 prism-native-host = { path = "../../crates/prism-native-host" }
 prism-torrent = { path = "../../crates/prism-torrent" }
 tauri = { version = "2.12", features = ["tray-icon", "image-png", "macos-private-api"] }
-tauri-plugin-single-instance = "2.5"
 tauri-plugin-notification = "2.6"
-tauri-plugin-autostart = "2.7"
 tauri-plugin-dialog = "2.8"
 tauri-plugin-opener = "2.7"
-tauri-plugin-window-state = "2.5"
-tauri-plugin-global-shortcut = "2.4"
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
-window-vibrancy = "0.8"
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -37,13 +35,23 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = "0.2"
 url = { workspace = true }
-arboard = { version = "3.6", default-features = false }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 
 [features]
 default = []
+
+# Desktop only: Android has no tray, autostart, self-updater, window state or clipboard crate.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2.5"
+tauri-plugin-autostart = "2.7"
+tauri-plugin-window-state = "2.5"
+tauri-plugin-global-shortcut = "2.4"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+window-vibrancy = "0.8"
+arboard = { version = "3.6", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

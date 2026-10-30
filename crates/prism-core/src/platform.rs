@@ -56,6 +56,10 @@ pub fn run_shell(command_line: &str) -> PResult<()> {
     Ok(())
 }
 
+#[cfg_attr(
+    not(any(windows, target_os = "linux", target_os = "macos")),
+    allow(dead_code)
+)]
 fn run(cmd: &str, args: &[&str]) -> PResult<()> {
     let status = Command::new(cmd).args(args).status()?;
     if status.success() {
@@ -267,6 +271,22 @@ mod imp {
 
     pub fn schedule_wake(_unix_secs: i64) -> PResult<()> {
         // `pmset schedule wake` requires administrator rights.
+        Err(PlatformError::Unsupported)
+    }
+}
+
+/// Android (and anything else): no shutdown/sleep/wake control from an app.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+mod imp {
+    use super::*;
+
+    pub fn power(_action: PowerAction) -> PResult<()> {
+        Err(PlatformError::Unsupported)
+    }
+
+    pub fn set_keep_awake(_on: bool) {}
+
+    pub fn schedule_wake(_unix_secs: i64) -> PResult<()> {
         Err(PlatformError::Unsupported)
     }
 }

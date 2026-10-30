@@ -1,0 +1,79 @@
+name: Android
+
+# Builds a debug APK (signed with the debug key, installable right away) on every push to the
+# `android` branch or by hand from the Actions tab. The APK is attached to the run as an artifact.
+on:
+  push:
+    branches: [android]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: 27.2.12479018
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Debug APK (arm64)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Android platform and NDK
+        run: |
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Frontend dependencies
+        run: npm ci --prefix app
+
+      - name: Generate the Android project
+        working-directory: app
+        run: npx tauri android init --ci
+
+      - name: Build the APK
+        working-directory: app
+        run: npx tauri android build --apk --debug --target aarch64
+
+      - name: Collect the APK
+        run: |
+          mkdir -p out
+          find app/src-tauri/gen/android -name '*.apk' -exec cp -v {} out/ \;
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prism-android-debug-apk
+          path: out/*.apk
+          if-no-files-found: error

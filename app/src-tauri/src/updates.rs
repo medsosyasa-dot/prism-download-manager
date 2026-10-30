@@ -1,11 +1,16 @@
 //! In-app updates: GitHub's `latest.json` → download the signed package → checkpoint every
 //! download → install → restart into the new version.
 
+#[cfg(desktop)]
 use std::sync::atomic::Ordering;
 
+#[cfg(desktop)]
 use prism_core::manager::Core;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::AppHandle;
+#[cfg(desktop)]
+use tauri::{Emitter, Manager};
+#[cfg(desktop)]
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::commands::CmdResult;
@@ -23,6 +28,7 @@ pub struct UpdateInfo {
 /// Only installs the updater can replace in place: the per-user setup (NSIS), the macOS app
 /// and the AppImage. MSI (per-machine) would get a second, per-user copy, deb/rpm belong to the
 /// package manager and the portable zip must stay portable — those get the website instead.
+#[cfg(desktop)]
 fn can_self_update() -> bool {
     use tauri::utils::config::BundleType;
     let portable = std::env::current_exe()
@@ -39,6 +45,7 @@ fn can_self_update() -> bool {
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> CmdResult<Option<UpdateInfo>> {
     let updater = app.updater().map_err(|e| e.to_string())?;
@@ -54,6 +61,7 @@ pub async fn check_update(app: AppHandle) -> CmdResult<Option<UpdateInfo>> {
     }))
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> CmdResult<()> {
     if !can_self_update() {
@@ -84,6 +92,7 @@ pub async fn install_update(app: AppHandle) -> CmdResult<()> {
 /// Windows: the installer replaces the running app and exits it, so everything is saved
 /// first (and the app restarts itself if the installer can't be started). macOS/Linux: the
 /// bundle is replaced in place first, so a failure leaves the app fully working.
+#[cfg(desktop)]
 async fn install_and_restart(
     app: &AppHandle,
     update: tauri_plugin_updater::Update,
@@ -110,9 +119,23 @@ async fn install_and_restart(
 }
 
 /// Checkpoint every download and remember what was running, so it continues after the restart.
+#[cfg(desktop)]
 async fn shutdown_for_restart(app: &AppHandle) {
     crate::QUITTING.store(true, Ordering::SeqCst);
     if let Some(core) = app.try_state::<Core>() {
         core.shutdown_for_restart().await;
     }
+}
+
+/// Android: updates come with a new APK, there is nothing to check in the app.
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn check_update(_app: AppHandle) -> CmdResult<Option<UpdateInfo>> {
+    Ok(None)
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn install_update(_app: AppHandle) -> CmdResult<()> {
+    Err("Install the new APK to update Prism on Android.".into())
 }
